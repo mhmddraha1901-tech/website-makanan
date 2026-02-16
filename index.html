@@ -3,196 +3,333 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FoodieShop - Pesan via WhatsApp</title>
+    <title>FoodieShop - Sistem Pesanan Terpadu</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
         body { font-family: 'Poppins', sans-serif; scroll-behavior: smooth; }
-        .cart-sidebar { transition: transform 0.3s ease-in-out; }
+        
+        .menu-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .menu-card:hover { transform: translateY(-8px); shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); }
+        
+        /* Efek Flying Item */
+        .fly-item {
+            position: fixed;
+            z-index: 100;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            pointer-events: none;
+            transition: all 0.8s cubic-bezier(0.19, 1, 0.22, 1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: 2px solid white;
+        }
+
+        .view { transition: opacity 0.3s ease; }
+        .cart-open { overflow: hidden; }
+        
+        /* Animasi Badge */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.4); }
+            100% { transform: scale(1); }
+        }
+        .badge-pop { animation: pop 0.3s ease-out; }
     </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
 
-    <script>
-        // --- KONFIGURASI TOKO ---
-        // Ganti dengan nomor WhatsApp Anda (Gunakan kode negara, misal 62)
-        const MY_WHATSAPP_NUMBER = "628123456789"; 
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.1.0/firebase-auth.js";
 
-        // DAFTAR MENU (Tambah atau hapus menu di sini)
+        // Firebase Configuration
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'foodie-shop-id';
+
+        // --- DATA MENU ---
         const MENU_DATA = [
             { id: 1, name: "Nasi Goreng Spesial", price: 25000, desc: "Nasi goreng bumbu rahasia dengan telur & kerupuk.", img: "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=400&q=80" },
             { id: 2, name: "Salad Sayur Segar", price: 30000, desc: "Sayuran organik dengan dressing lemon segar.", img: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=400&q=80" },
             { id: 3, name: "Pizza Margherita", price: 45000, desc: "Pizza tipis Italia dengan mozzarella melimpah.", img: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=400&q=80" },
-            { id: 4, name: "Ayam Goreng Krispi", price: 20000, desc: "Ayam goreng renyah dengan sambal bawang.", img: "https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=400&q=80" },
-            { id: 5, name: "Es Teh Manis", price: 5000, desc: "Teh melati segar dengan gula asli.", img: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=400&q=80" },
-            { id: 6, name: "Burger Sapi Juara", price: 35000, desc: "Daging sapi pilihan dengan keju cheddar.", img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=400&q=80" }
+            { id: 4, name: "Ayam Goreng Krispi", price: 20000, desc: "Ayam goreng renyah dengan sambal bawang.", img: "https://images.unsplash.com/photo-1562967914-608f82629710?auto=format&fit=crop&w=400&q=80" }
         ];
-    </script>
 
-    <!-- Navigation -->
-    <nav class="bg-white shadow-md sticky top-0 z-50">
-        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <a href="#" class="text-2xl font-bold text-orange-600 tracking-tight">FoodieShop</a>
-            <div class="flex items-center">
-                <button onclick="toggleCart()" class="relative p-2 text-gray-600 hover:text-orange-600 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                    <span id="cart-count" class="absolute top-0 right-0 bg-red-600 text-white rounded-full text-[10px] w-5 h-5 flex items-center justify-center font-bold">0</span>
-                </button>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <header class="bg-orange-600 py-12 text-center text-white px-4">
-        <h1 class="text-3xl md:text-5xl font-bold mb-2">Menu Spesial Hari Ini</h1>
-        <p class="opacity-90">Klik menu di bawah untuk mulai memesan</p>
-    </header>
-
-    <!-- Menu Grid -->
-    <main class="container mx-auto px-4 py-12">
-        <div id="menu-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            <!-- Menu items diisi via JS -->
-        </div>
-    </main>
-
-    <!-- Sidebar Keranjang -->
-    <div id="cart-sidebar" class="fixed inset-0 z-[60] overflow-hidden hidden">
-        <div class="absolute inset-0 bg-black bg-opacity-50 transition-opacity" onclick="toggleCart()"></div>
-        <div class="fixed inset-y-0 right-0 pl-10 max-w-full flex">
-            <div class="w-screen max-w-md bg-white shadow-2xl flex flex-col">
-                <div class="p-6 border-b flex justify-between items-center bg-orange-600 text-white">
-                    <h2 class="text-xl font-bold">Pesanan Anda</h2>
-                    <button onclick="toggleCart()" class="p-2 hover:bg-orange-700 rounded-full transition">
-                        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
-                </div>
-
-                <div id="cart-items" class="flex-1 overflow-y-auto p-6 space-y-4">
-                    <!-- Item keranjang muncul di sini -->
-                </div>
-
-                <div class="p-6 border-t bg-gray-50">
-                    <div class="flex justify-between items-center mb-4">
-                        <span class="text-lg font-medium">Total Harga:</span>
-                        <span id="cart-total" class="text-2xl font-bold text-orange-600">Rp 0</span>
-                    </div>
-                    <button onclick="checkoutWhatsApp()" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-green-700 transition flex justify-center items-center gap-2">
-                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.539 2.016 2.126-.54c1.029.563 2.025.912 3.162.914.001 0 .001 0 0 0 3.182 0 5.767-2.586 5.767-5.766 0-3.18-2.585-5.766-5.767-5.766zm3.332 7.728c-.147.411-.741.748-1.012.793-.27.045-.515.074-.836-.023-.173-.053-.404-.131-.678-.232-1.161-.433-1.928-1.581-1.986-1.657-.058-.077-.468-.611-.468-1.166 0-.555.291-.827.394-.942.104-.115.226-.144.301-.144s.15.002.215.006c.068.003.159-.026.248.188.1.239.342.819.371.879.03.059.05.128.01.208-.039.08-.059.13-.117.198-.059.069-.124.153-.177.206-.059.058-.121.121-.052.238.069.117.306.495.656.799.452.392.833.513.949.57.117.058.186.048.256-.03.07-.077.298-.34.378-.456.08-.117.159-.098.268-.058.11.039.697.321.817.38s.199.089.229.138c.03.05.03.284-.117.695z"></path></svg>
-                        Pesan via WhatsApp
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script>
         let cart = [];
+        let user = null;
 
-        // Inisialisasi daftar menu ke layar
-        function renderMenu() {
+        onAuthStateChanged(auth, (u) => {
+            user = u;
+            if (!u) signInAnonymously(auth);
+            if (u) loadAdminOrders();
+        });
+
+        window.showView = (viewName) => {
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            document.getElementById(viewName + '-view').classList.remove('hidden');
+        };
+
+        // RENDER MENU
+        window.renderMenu = () => {
             const container = document.getElementById('menu-container');
-            container.innerHTML = MENU_DATA.map(item => `
-                <div class="bg-white rounded-2xl shadow-md overflow-hidden hover:shadow-xl transition-shadow border border-gray-100 flex flex-col">
-                    <img src="${item.img}" class="w-full h-52 object-cover" alt="${item.name}">
-                    <div class="p-6 flex flex-col flex-1">
+            container.innerHTML = MENU_DATA.map((item, index) => `
+                <div class="menu-card bg-white rounded-3xl shadow-sm overflow-hidden border border-gray-100 flex flex-col animate__animated animate__fadeInUp" style="animation-delay: ${index * 0.1}s">
+                    <div class="relative overflow-hidden h-48">
+                        <img src="${item.img}" id="img-${item.id}" class="w-full h-full object-cover transition-transform duration-500 hover:scale-110">
+                    </div>
+                    <div class="p-5 flex flex-col flex-1">
                         <div class="flex justify-between items-start mb-2">
-                            <h3 class="font-bold text-xl">${item.name}</h3>
-                            <span class="text-orange-600 font-bold">Rp ${item.price.toLocaleString('id-ID')}</span>
+                            <h3 class="font-bold text-lg">${item.name}</h3>
+                            <span class="text-orange-600 font-bold text-sm">Rp ${item.price.toLocaleString('id-ID')}</span>
                         </div>
-                        <p class="text-gray-500 text-sm mb-6 flex-1">${item.desc}</p>
-                        <button onclick="addToCart(${item.id})" class="w-full bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700 transition">
-                            Tambah ke Keranjang
+                        <p class="text-gray-500 text-xs mb-4 flex-1">${item.desc}</p>
+                        <button onclick="animateToCart(event, ${item.id})" class="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition active:scale-95 flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"></path></svg>
+                            Tambah
                         </button>
                     </div>
                 </div>
             `).join('');
-        }
+        };
 
-        // Tambah item ke keranjang
-        function addToCart(id) {
+        // ANIMASI TERBANG KE KERANJANG
+        window.animateToCart = (event, id) => {
+            const btn = event.currentTarget;
+            const img = document.getElementById(`img-${id}`);
+            const cartIcon = document.getElementById('cart-icon-nav');
+            
+            // Buat klon gambar untuk terbang
+            const flyer = document.createElement('img');
+            flyer.src = img.src;
+            flyer.classList.add('fly-item');
+            
+            // Posisi awal (tombol/gambar klik)
+            const rect = img.getBoundingClientRect();
+            flyer.style.left = `${rect.left}px`;
+            flyer.style.top = `${rect.top}px`;
+            document.body.appendChild(flyer);
+
+            // Posisi tujuan (ikon keranjang)
+            const cartRect = cartIcon.getBoundingClientRect();
+            
+            setTimeout(() => {
+                flyer.style.left = `${cartRect.left + 10}px`;
+                flyer.style.top = `${cartRect.top + 10}px`;
+                flyer.style.width = `10px`;
+                flyer.style.height = `10px`;
+                flyer.style.opacity = `0.5`;
+            }, 10);
+
+            // Selesai animasi
+            setTimeout(() => {
+                flyer.remove();
+                addToCart(id);
+                
+                // Efek pop pada badge
+                const badge = document.getElementById('cart-count');
+                badge.classList.remove('badge-pop');
+                void badge.offsetWidth; 
+                badge.classList.add('badge-pop');
+            }, 800);
+        };
+
+        window.addToCart = (id) => {
             const product = MENU_DATA.find(p => p.id === id);
             const inCart = cart.find(item => item.id === id);
-
-            if (inCart) {
-                inCart.qty += 1;
-            } else {
-                cart.push({ ...product, qty: 1 });
-            }
+            if (inCart) inCart.qty += 1;
+            else cart.push({ ...product, qty: 1 });
             updateUI();
-        }
+        };
 
-        // Ubah jumlah atau hapus item
-        function changeQty(id, delta) {
+        window.changeQty = (id, delta) => {
             const item = cart.find(i => i.id === id);
             if (item) {
                 item.qty += delta;
                 if (item.qty <= 0) cart = cart.filter(i => i.id !== id);
                 updateUI();
             }
-        }
+        };
 
-        // Perbarui tampilan Keranjang dan Badge
-        function updateUI() {
+        const updateUI = () => {
             const list = document.getElementById('cart-items');
             const totalEl = document.getElementById('cart-total');
             const countEl = document.getElementById('cart-count');
 
-            if (cart.length === 0) {
-                list.innerHTML = `<div class="text-center py-20 text-gray-400">Keranjang masih kosong</div>`;
-            } else {
-                list.innerHTML = cart.map(item => `
-                    <div class="flex gap-4 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                        <img src="${item.img}" class="w-16 h-16 rounded-md object-cover">
+            list.innerHTML = cart.length === 0 ? '<div class="text-center py-10"><p class="text-gray-400">Keranjang kosong</p></div>' : 
+                cart.map(item => `
+                    <div class="flex items-center gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm animate__animated animate__fadeInRight animate__faster">
+                        <img src="${item.img}" class="w-14 h-14 rounded-xl object-cover">
                         <div class="flex-1">
-                            <h4 class="font-bold text-sm">${item.name}</h4>
-                            <p class="text-orange-600 font-bold text-xs">Rp ${item.price.toLocaleString('id-ID')}</p>
-                            <div class="flex items-center mt-2 space-x-3">
-                                <button onclick="changeQty(${item.id}, -1)" class="w-6 h-6 flex items-center justify-center bg-gray-200 rounded text-xs font-bold">-</button>
-                                <span class="text-sm font-bold">${item.qty}</span>
-                                <button onclick="changeQty(${item.id}, 1)" class="w-6 h-6 flex items-center justify-center bg-gray-200 rounded text-xs font-bold">+</button>
+                            <h4 class="font-bold text-xs">${item.name}</h4>
+                            <div class="flex items-center gap-3 mt-1">
+                                <button onclick="changeQty(${item.id}, -1)" class="w-7 h-7 bg-gray-100 rounded-lg hover:bg-gray-200 transition">-</button>
+                                <span class="text-xs font-black">${item.qty}</span>
+                                <button onclick="changeQty(${item.id}, 1)" class="w-7 h-7 bg-gray-100 rounded-lg hover:bg-gray-200 transition">+</button>
                             </div>
                         </div>
+                        <p class="font-bold text-xs text-orange-600">Rp ${(item.price * item.qty).toLocaleString('id-ID')}</p>
                     </div>
                 `).join('');
-            }
 
             const total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
             totalEl.innerText = `Rp ${total.toLocaleString('id-ID')}`;
             countEl.innerText = cart.reduce((sum, item) => sum + item.qty, 0);
-        }
+        };
 
-        function toggleCart() {
-            document.getElementById('cart-sidebar').classList.toggle('hidden');
-        }
+        window.toggleCart = () => {
+            const sidebar = document.getElementById('cart-sidebar');
+            sidebar.classList.toggle('hidden');
+            document.body.classList.toggle('cart-open');
+        };
 
-        // Kirim pesanan ke WhatsApp
-        function checkoutWhatsApp() {
-            if (cart.length === 0) {
-                alert("Silakan pilih menu terlebih dahulu!");
-                return;
+        window.submitOrder = async () => {
+            if (cart.length === 0) return;
+            const orderBtn = document.getElementById('submit-btn');
+            orderBtn.disabled = true;
+            orderBtn.innerHTML = `<span class="animate-pulse">Mengirim...</span>`;
+
+            try {
+                const orderData = {
+                    items: cart,
+                    total: cart.reduce((sum, item) => sum + (item.price * item.qty), 0),
+                    timestamp: serverTimestamp(),
+                    status: 'Baru'
+                };
+
+                const publicOrdersRef = collection(db, 'artifacts', appId, 'public', 'data', 'orders');
+                await addDoc(publicOrdersRef, orderData);
+
+                // Notifikasi sukses custom (bukan alert)
+                showToast("Pesanan Berhasil!");
+                cart = [];
+                updateUI();
+                toggleCart();
+            } catch (err) {
+                showToast("Gagal mengirim pesanan", true);
+            } finally {
+                orderBtn.disabled = false;
+                orderBtn.innerHTML = "PESAN SEKARANG";
             }
+        };
 
-            let text = "*Halo FoodieShop! Saya ingin memesan:*\n\n";
-            let totalBill = 0;
+        function showToast(msg, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full text-white font-bold shadow-2xl z-[100] animate__animated animate__fadeInUp ${isError ? 'bg-red-500' : 'bg-green-500'}`;
+            toast.innerText = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.replace('animate__fadeInUp', 'animate__fadeOutDown');
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
 
-            cart.forEach((item, i) => {
-                const subtotal = item.price * item.qty;
-                text += `${i + 1}. *${item.name}* (${item.qty}x)\n   Subtotal: Rp ${subtotal.toLocaleString('id-ID')}\n`;
-                totalBill += subtotal;
+        function loadAdminOrders() {
+            if (!user) return;
+            const ordersRef = collection(db, 'artifacts', appId, 'public', 'data', 'orders');
+            onSnapshot(ordersRef, (snapshot) => {
+                const container = document.getElementById('admin-orders-list');
+                const orders = [];
+                snapshot.forEach(doc => orders.push({ id: doc.id, ...doc.data() }));
+                orders.sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+                document.getElementById('order-count-badge').innerText = orders.length;
+
+                container.innerHTML = orders.length === 0 ? '<div class="text-center py-20 text-gray-400">Belum ada pesanan</div>' :
+                    orders.map(order => `
+                        <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 mb-4 animate__animated animate__fadeIn">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="bg-orange-100 text-orange-600 px-3 py-1 rounded-full text-[10px] font-bold">PESANAN #${order.id.slice(-4).toUpperCase()}</span>
+                                <span class="text-[10px] text-gray-400 font-medium">${order.timestamp ? new Date(order.timestamp.seconds * 1000).toLocaleTimeString() : 'Baru'}</span>
+                            </div>
+                            <div class="space-y-2 mb-4">
+                                ${order.items.map(i => `<div class="flex justify-between text-sm"><span>${i.name} <small class="text-gray-400">x${i.qty}</small></span> <span>Rp ${(i.price*i.qty).toLocaleString('id-ID')}</span></div>`).join('')}
+                            </div>
+                            <div class="pt-4 border-t flex justify-between items-center">
+                                <span class="text-sm font-bold">Total</span>
+                                <span class="text-lg font-black text-orange-600">Rp ${order.total.toLocaleString('id-ID')}</span>
+                            </div>
+                        </div>
+                    `).join('');
             });
-
-            text += `\n*TOTAL PESANAN: Rp ${totalBill.toLocaleString('id-ID')}*`;
-            text += `\n\n_Mohon konfirmasi pesanan saya, terima kasih._`;
-
-            const url = `https://wa.me/${MY_WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
-            window.open(url, '_blank');
         }
 
         window.onload = renderMenu;
     </script>
+
+    <!-- Navigation -->
+    <nav class="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <a href="javascript:showView('customer')" class="text-2xl font-black text-orange-600 tracking-tighter italic">FOODIE.</a>
+            <div class="flex items-center gap-6">
+                <button onclick="showView('admin')" class="text-[10px] font-black text-gray-400 hover:text-orange-600 uppercase tracking-tighter">Admin Dashboard</button>
+                <button id="cart-icon-nav" onclick="toggleCart()" class="relative p-2 text-gray-800 transition transform active:scale-90">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
+                    <span id="cart-count" class="absolute top-0 right-0 bg-red-600 text-white rounded-full text-[9px] w-5 h-5 flex items-center justify-center font-bold shadow-lg border-2 border-white">0</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- VIEW PEMBELI -->
+    <div id="customer-view" class="view">
+        <header class="bg-gradient-to-b from-orange-600 to-orange-500 py-16 text-center text-white px-6">
+            <div class="animate__animated animate__zoomIn">
+                <h1 class="text-4xl md:text-5xl font-black mb-3">Lapar Melanda?</h1>
+                <p class="opacity-90 max-w-md mx-auto text-sm">Pesan makanan favoritmu dalam hitungan detik. Cepat, Mudah, Nikmat!</p>
+            </div>
+        </header>
+
+        <main class="container mx-auto px-6 py-12">
+            <div id="menu-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8"></div>
+        </main>
+    </div>
+
+    <!-- VIEW ADMIN -->
+    <div id="admin-view" class="view hidden bg-gray-100 min-h-screen">
+        <div class="bg-white border-b p-8 sticky top-0 z-10">
+            <div class="container mx-auto flex justify-between items-center">
+                <div>
+                    <h2 class="text-3xl font-black text-gray-900">Pesanan Masuk</h2>
+                    <p class="text-gray-400 text-sm">Kelola semua orderan secara real-time</p>
+                </div>
+                <div class="bg-orange-600 text-white px-6 py-3 rounded-2xl font-black">
+                    <span id="order-count-badge">0</span> Order
+                </div>
+            </div>
+        </div>
+        <div class="container mx-auto p-8 max-w-2xl" id="admin-orders-list"></div>
+    </div>
+
+    <!-- Sidebar Keranjang -->
+    <div id="cart-sidebar" class="fixed inset-0 z-[60] hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onclick="toggleCart()"></div>
+        <div class="fixed inset-y-0 right-0 max-w-full flex">
+            <div class="w-screen max-w-md bg-white shadow-2xl flex flex-col animate__animated animate__slideInRight animate__faster">
+                <div class="p-8 border-b flex justify-between items-center">
+                    <h2 class="text-2xl font-black">Checkout 🛍️</h2>
+                    <button onclick="toggleCart()" class="text-gray-400 hover:text-black transition">Tutup</button>
+                </div>
+                <div id="cart-items" class="flex-1 overflow-y-auto p-8 space-y-4 bg-gray-50/50"></div>
+                <div class="p-8 border-t bg-white">
+                    <div class="flex justify-between items-center mb-8">
+                        <span class="text-gray-400 font-bold uppercase tracking-widest text-xs">Total Pembayaran</span>
+                        <span id="cart-total" class="text-3xl font-black text-orange-600">Rp 0</span>
+                    </div>
+                    <button id="submit-btn" onclick="submitOrder()" class="w-full bg-gray-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-orange-600 transition shadow-xl active:scale-95">
+                        PESAN SEKARANG
+                    </button>
+                    <p class="text-center text-[10px] text-gray-400 mt-6 italic">Pesanan Anda akan langsung muncul di monitor dapur kami.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
